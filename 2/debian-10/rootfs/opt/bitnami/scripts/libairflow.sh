@@ -38,13 +38,25 @@ airflow_validate() {
 
     # Check LDAP parameters
     if is_boolean_yes "$AIRFLOW_LDAP_ENABLE"; then
-        [[ -z "$AIRFLOW_LDAP_URI" ]] && print_validation_error "Missing AIRFLOW_LDAP_URI"
+        # [[ -z "$AIRFLOW_LDAP_URI" ]] && print_validation_error "Missing AIRFLOW_LDAP_URI"
+        [[ -z "$AUTH_LDAP_SERVER" ]] && print_validation_error "Missing AUTH_LDAP_SERVER"
         [[ -z "$AIRFLOW_LDAP_SEARCH" ]] && print_validation_error "Missing AIRFLOW_LDAP_SEARCH"
-        [[ -z "$AIRFLOW_LDAP_BIND_USER" ]] && print_validation_error "Missing AIRFLOW_LDAP_BIND_USER"
         [[ -z "$AIRFLOW_LDAP_UID_FIELD" ]] && print_validation_error "Missing AIRFLOW_LDAP_UID_FIELD"
-        [[ -z "$AIRFLOW_LDAP_BIND_PASSWORD" ]] && print_validation_error "Missing AIRFLOW_LDAP_BIND_PASSWORD"
+
+        # [[ -z "$AIRFLOW_LDAP_BIND_USER" ]] && print_validation_error "Missing AIRFLOW_LDAP_BIND_USER"
+        # [[ -z "$AIRFLOW_LDAP_BIND_PASSWORD" ]] && print_validation_error "Missing AIRFLOW_LDAP_BIND_PASSWORD"
+        [[ -z "$AIRFLOW_LDAP_USERNAME_FORMAT" && -n "$AIRFLOW_LDAP_BIND_USER" && -z "$AIRFLOW_LDAP_BIND_PASSWORD" ]] \
+            &&  print_validation_error "Missing AIRFLOW_LDAP_BIND_PASSWORD"
+        [[ -z "$AIRFLOW_LDAP_USERNAME_FORMAT" && -z "$AIRFLOW_LDAP_BIND_USER" && -n "$AIRFLOW_LDAP_BIND_PASSWORD" ]] \
+            &&  print_validation_error "Missing AIRFLOW_LDAP_BIND_USER"
+        [[ -z "$AIRFLOW_LDAP_USERNAME_FORMAT" && -z "$AIRFLOW_LDAP_BIND_USER" && -z "$AIRFLOW_LDAP_BIND_PASSWORD" ]] \
+            &&  print_validation_error "Need AIRFLOW_LDAP_USERNAME_FORMAT, or both AIRFLOW_LDAP_BIND_USER and AIRFLOW_LDAP_BIND_PASSWORD"
+        [[ -n "$AIRFLOW_LDAP_USERNAME_FORMAT" && (-n "$AIRFLOW_LDAP_BIND_USER" || -n "$AIRFLOW_LDAP_BIND_PASSWORD") ]] \
+            &&  print_validation_error "Can not both AIRFLOW_LDAP_USERNAME_FORMAT and AIRFLOW_LDAP_BIND_*"
+
         if [[ "$AIRFLOW_LDAP_USE_TLS" == "True" ]]; then
-            [[ -z "$AIRFLOW_LDAP_TLS_CA_CERTIFICATE" ]] && print_validation_error "Missing AIRFLOW_LDAP_TLS_CA_CERTIFICATE"
+            # [[ -z "$AIRFLOW_LDAP_TLS_CA_CERTIFICATE" ]] && print_validation_error "Missing AIRFLOW_LDAP_TLS_CA_CERTIFICATE"
+            [[ -z "$AIRFLOW_LDAP_TLS_CACERTFILE" ]] && print_validation_error "Missing AIRFLOW_LDAP_TLS_CACERTFILE"
         fi
     fi
 
@@ -236,17 +248,44 @@ airflow_configure_webserver_authentication() {
 
     if is_boolean_yes "$AIRFLOW_LDAP_ENABLE"; then
         info "Enabling LDAP authentication"
+        # Added all keys from https://flask-appbuilder.readthedocs.io/en/latest/config.html#configuration-keys
+        #   except AUTH_USER_REGISTRATION_ROLE_JMESPATH,
         airflow_webserver_conf_set "AUTH_USER_REGISTRATION" "True",
         airflow_webserver_conf_set "AUTH_TYPE" "AUTH_LDAP",
-        airflow_webserver_conf_set "AUTH_LDAP_SERVER" "$AIRFLOW_LDAP_URI",
-        airflow_webserver_conf_set "AUTH_LDAP_SEARCH" "$AIRFLOW_LDAP_SEARCH",
+        # airflow_webserver_conf_set "AUTH_LDAP_SERVER" "$AIRFLOW_LDAP_URI", !!
+        # airflow_webserver_conf_set "AUTH_LDAP_SEARCH" "$AIRFLOW_LDAP_SEARCH",
+        # airflow_webserver_conf_set "AUTH_LDAP_BIND_USER" "$AIRFLOW_LDAP_BIND_USER",
+        # airflow_webserver_conf_set "AUTH_LDAP_BIND_PASSWORD" "$AIRFLOW_LDAP_BIND_PASSWORD",
+        # airflow_webserver_conf_set "AUTH_LDAP_UID_FIELD" "$AIRFLOW_LDAP_UID_FIELD",
+        airflow_webserver_conf_set "AUTH_LDAP_USE_TLS" "$AIRFLOW_LDAP_USE_TLS",
+        # airflow_webserver_conf_set "AUTH_LDAP_ALLOW_SELF_SIGNED" "$AIRFLOW_LDAP_ALLOW_SELF_SIGNED",
+        # airflow_webserver_conf_set "AUTH_LDAP_TLS_CACERTFILE" "$AIRFLOW_LDAP_TLS_CA_CERTIFICATE", !!
+        # airflow_webserver_conf_set "AUTH_USER_REGISTRATION_ROLE" "$AIRFLOW_USER_REGISTRATION_ROLE",
+
+        airflow_webserver_conf_set "AUTH_USERNAME_CI" "$AIRFLOW_USERNAME_CI",
+        airflow_webserver_conf_set "AUTH_USER_REGISTRATION_ROLE" "$AIRFLOW_USER_REGISTRATION_ROLE",
+        airflow_webserver_conf_set "AUTH_ROLES_SYNC_AT_LOGIN" "$AIRFLOW_ROLES_SYNC_AT_LOGIN",
+        airflow_webserver_conf_set "AUTH_ROLES_MAPPING" "$AIRFLOW_ROLES_MAPPING",
+        airflow_webserver_conf_set "AUTH_LDAP_SERVER" "$AIRFLOW_LDAP_SERVER",
         airflow_webserver_conf_set "AUTH_LDAP_BIND_USER" "$AIRFLOW_LDAP_BIND_USER",
         airflow_webserver_conf_set "AUTH_LDAP_BIND_PASSWORD" "$AIRFLOW_LDAP_BIND_PASSWORD",
+        airflow_webserver_conf_set "AUTH_LDAP_TLS_DEMAND" "$AIRFLOW_LDAP_TLS_DEMAND",
+        airflow_webserver_conf_set "AUTH_LDAP_TLS_CACERTDIR" "$AIRFLOW_LDAP_TLS_CACERTDIR",
+        airflow_webserver_conf_set "AUTH_LDAP_TLS_CACERTFILE" "$AIRFLOW_LDAP_TLS_CACERTFILE",
+        airflow_webserver_conf_set "AUTH_LDAP_TLS_CERTFILE" "$AIRFLOW_LDAP_TLS_CERTFILE",
+        airflow_webserver_conf_set "AUTH_LDAP_TLS_KEYFILE" "$AIRFLOW_LDAP_TLS_KEYFILE",
+        airflow_webserver_conf_set "AUTH_LDAP_SEARCH" "$AIRFLOW_LDAP_SEARCH",
+        airflow_webserver_conf_set "AUTH_LDAP_SEARCH_FILTER" "$AIRFLOW_LDAP_SEARCH_FILTER",
         airflow_webserver_conf_set "AUTH_LDAP_UID_FIELD" "$AIRFLOW_LDAP_UID_FIELD",
-        airflow_webserver_conf_set "AUTH_LDAP_USE_TLS" "$AIRFLOW_LDAP_USE_TLS",
+        airflow_webserver_conf_set "AUTH_LDAP_GROUP_FIELD" "$AIRFLOW_LDAP_GROUP_FIELD",
+        airflow_webserver_conf_set "AUTH_LDAP_FIRSTNAME_FIELD" "$AIRFLOW_LDAP_FIRSTNAME_FIELD",
+        airflow_webserver_conf_set "AUTH_LDAP_LASTNAME_FIELD" "$AIRFLOW_LDAP_LASTNAME_FIELD",
+        airflow_webserver_conf_set "AUTH_LDAP_EMAIL_FIELD" "$AIRFLOW_LDAP_EMAIL_FIELD",
         airflow_webserver_conf_set "AUTH_LDAP_ALLOW_SELF_SIGNED" "$AIRFLOW_LDAP_ALLOW_SELF_SIGNED",
-        airflow_webserver_conf_set "AUTH_LDAP_TLS_CACERTFILE" "$AIRFLOW_LDAP_TLS_CA_CERTIFICATE",
-        airflow_webserver_conf_set "AUTH_USER_REGISTRATION_ROLE" "$AIRFLOW_USER_REGISTRATION_ROLE",
+        airflow_webserver_conf_set "AUTH_LDAP_APPEND_DOMAIN" "$AIRFLOW_LDAP_APPEND_DOMAIN",
+        airflow_webserver_conf_set "AUTH_LDAP_USERNAME_FORMAT" "$AIRFLOW_LDAP_USERNAME_FORMAT",
+        airflow_webserver_conf_set "AUTH_ROLE_ADMIN" "$AIRFLOW_ROLE_ADMIN",
+        airflow_webserver_conf_set "AUTH_ROLE_PUBLIC" "$AIRFLOW_ROLE_PUBLIC",
     fi
 }
 
