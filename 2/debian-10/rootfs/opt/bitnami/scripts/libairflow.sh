@@ -16,6 +16,24 @@
 # Functions
 
 ########################
+# Create alias for environment variable, so both can be used
+# Globals:
+#   None
+# Arguments:
+#   $1 - Alias environment variable name
+#   $2 - Original environment variable name
+# Returns:
+#   None
+#########################
+airflow_declare_alias_env() {
+    local -r alias="${1:?missing environment variable alias}"
+    local -r original="${2:?missing original environment variable}"
+    if printenv "${original}" > /dev/null; then
+        export "$alias"="${!original:-}"
+    fi
+}
+
+########################
 # Validate Airflow inputs
 # Globals:
 #   AIRFLOW_*
@@ -38,13 +56,14 @@ airflow_validate() {
 
     # Check LDAP parameters
     if is_boolean_yes "$AIRFLOW_LDAP_ENABLE"; then
-        # [[ -z "$AIRFLOW_LDAP_URI" ]] && print_validation_error "Missing AIRFLOW_LDAP_URI"
-        [[ -z "$AUTH_LDAP_SERVER" ]] && print_validation_error "Missing AUTH_LDAP_SERVER"
+        [[ -z "$AIRFLOW_LDAP_SERVER" && -z "$AIRFLOW_LDAP_URI" ]] \
+            && print_validation_error "Missing AIRFLOW_LDAP_SERVER or AIRFLOW_LDAP_URI"
+        [[ -z "$AIRFLOW_LDAP_SERVER" && -n "$AIRFLOW_LDAP_URI" ]] \
+            && airflow_declare_alias_env "AIRFLOW_LDAP_SERVER" "AIRFLOW_LDAP_URI"
+
         [[ -z "$AIRFLOW_LDAP_SEARCH" ]] && print_validation_error "Missing AIRFLOW_LDAP_SEARCH"
         [[ -z "$AIRFLOW_LDAP_UID_FIELD" ]] && print_validation_error "Missing AIRFLOW_LDAP_UID_FIELD"
 
-        # [[ -z "$AIRFLOW_LDAP_BIND_USER" ]] && print_validation_error "Missing AIRFLOW_LDAP_BIND_USER"
-        # [[ -z "$AIRFLOW_LDAP_BIND_PASSWORD" ]] && print_validation_error "Missing AIRFLOW_LDAP_BIND_PASSWORD"
         [[ -z "$AIRFLOW_LDAP_USERNAME_FORMAT" && -n "$AIRFLOW_LDAP_BIND_USER" && -z "$AIRFLOW_LDAP_BIND_PASSWORD" ]] \
             &&  print_validation_error "Missing AIRFLOW_LDAP_BIND_PASSWORD"
         [[ -z "$AIRFLOW_LDAP_USERNAME_FORMAT" && -z "$AIRFLOW_LDAP_BIND_USER" && -n "$AIRFLOW_LDAP_BIND_PASSWORD" ]] \
@@ -55,8 +74,10 @@ airflow_validate() {
             &&  print_validation_error "Can not both AIRFLOW_LDAP_USERNAME_FORMAT and AIRFLOW_LDAP_BIND_*"
 
         if [[ "$AIRFLOW_LDAP_USE_TLS" == "True" ]]; then
-            # [[ -z "$AIRFLOW_LDAP_TLS_CA_CERTIFICATE" ]] && print_validation_error "Missing AIRFLOW_LDAP_TLS_CA_CERTIFICATE"
-            [[ -z "$AIRFLOW_LDAP_TLS_CACERTFILE" ]] && print_validation_error "Missing AIRFLOW_LDAP_TLS_CACERTFILE"
+            [[ -z "$AIRFLOW_LDAP_TLS_CACERTFILE" && -z "$AIRFLOW_LDAP_TLS_CA_CERTIFICATE" ]] \
+                && print_validation_error "Missing AIRFLOW_LDAP_TLS_CACERTFILE or AIRFLOW_LDAP_TLS_CA_CERTIFICATE"
+            [[ -z "$AIRFLOW_LDAP_TLS_CACERTFILE" && -n "$AIRFLOW_LDAP_TLS_CA_CERTIFICATE" ]] \
+                && airflow_declare_alias_env "AIRFLOW_LDAP_TLS_CACERTFILE" "AIRFLOW_LDAP_TLS_CA_CERTIFICATE"
         fi
     fi
 
@@ -252,15 +273,7 @@ airflow_configure_webserver_authentication() {
         #   except AUTH_USER_REGISTRATION_ROLE_JMESPATH,
         airflow_webserver_conf_set "AUTH_USER_REGISTRATION" "True",
         airflow_webserver_conf_set "AUTH_TYPE" "AUTH_LDAP",
-        # airflow_webserver_conf_set "AUTH_LDAP_SERVER" "$AIRFLOW_LDAP_URI", !!
-        # airflow_webserver_conf_set "AUTH_LDAP_SEARCH" "$AIRFLOW_LDAP_SEARCH",
-        # airflow_webserver_conf_set "AUTH_LDAP_BIND_USER" "$AIRFLOW_LDAP_BIND_USER",
-        # airflow_webserver_conf_set "AUTH_LDAP_BIND_PASSWORD" "$AIRFLOW_LDAP_BIND_PASSWORD",
-        # airflow_webserver_conf_set "AUTH_LDAP_UID_FIELD" "$AIRFLOW_LDAP_UID_FIELD",
         airflow_webserver_conf_set "AUTH_LDAP_USE_TLS" "$AIRFLOW_LDAP_USE_TLS",
-        # airflow_webserver_conf_set "AUTH_LDAP_ALLOW_SELF_SIGNED" "$AIRFLOW_LDAP_ALLOW_SELF_SIGNED",
-        # airflow_webserver_conf_set "AUTH_LDAP_TLS_CACERTFILE" "$AIRFLOW_LDAP_TLS_CA_CERTIFICATE", !!
-        # airflow_webserver_conf_set "AUTH_USER_REGISTRATION_ROLE" "$AIRFLOW_USER_REGISTRATION_ROLE",
 
         airflow_webserver_conf_set "AUTH_USERNAME_CI" "$AIRFLOW_USERNAME_CI",
         airflow_webserver_conf_set "AUTH_USER_REGISTRATION_ROLE" "$AIRFLOW_USER_REGISTRATION_ROLE",
